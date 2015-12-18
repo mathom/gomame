@@ -292,6 +292,9 @@ func main() {
 		index := openIndexFile(*indexFile)
 		query := bleve.NewQueryStringQuery(*search)
 		search := bleve.NewSearchRequest(query)
+		search.Fields = []string{"Year", "Manufacturer",
+			"Description", "DriverStatus"}
+		search.Size = 5
 		searchResults, err := index.Search(search)
 		if err != nil {
 			log.Fatal(err)
