@@ -1,10 +1,10 @@
 # gomame
-A basic frontend for MAME written in Go.
+A basic frontend for [MAME](http://mamedev.org/) written in [Go](https://golang.org/).
 
-## Installation
+### Installation
 `go get github.com/mathom/gomame`
 
-## Setup
+### Setup
 You'll need to build the search index first:
 `gomame -mame path/to/mamebinary -reindex`
 
@@ -14,7 +14,7 @@ The output will look something like this:
 258 / 689 [====================>----------------------------------] 37.45 % 10s
 ```
 
-## Searching
+### Searching
 You can do full text searches using the
 [Bleve query language](http://www.blevesearch.com/docs/Query-String-Query/).
 
