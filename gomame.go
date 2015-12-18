@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/blevesearch/bleve"
+	_ "github.com/blevesearch/bleve/index/store/goleveldb"
 	"github.com/cheggaaa/pb"
 	"github.com/vharitonsky/iniflags"
 )
@@ -125,11 +126,26 @@ func machineToGame(m machine) Game {
 func indexGames(index bleve.Index, input <-chan Game) <-chan Game {
 	out := make(chan Game)
 
+	maxBatched := 1000
+
 	go func() {
 		defer timeTrack(time.Now(), "indexGames")
+		batch := index.NewBatch()
+		count := 0
 		for g := range input {
-			index.Index(g.Name, g)
+			batch.Index(g.Name, g)
 			out <- g
+			count++
+			if count > maxBatched {
+				if err := index.Batch(batch); err != nil {
+					log.Fatal(err)
+				}
+				batch = index.NewBatch()
+				count = 0
+			}
+		}
+		if err := index.Batch(batch); err != nil {
+			log.Fatal(err)
 		}
 		close(out)
 	}()
@@ -283,6 +299,8 @@ func indexRoms() {
 
 func main() {
 	iniflags.Parse()
+
+	bleve.Config.DefaultKVStore = "goleveldb"
 
 	if *reindex {
 		indexRoms()

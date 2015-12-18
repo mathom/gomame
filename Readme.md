@@ -8,11 +8,10 @@ A basic frontend for MAME written in Go.
 You'll need to build the search index first:
 `gomame -mame path/to/mamebinary -reindex`
 
-It will take a while with the current method.
 The output will look something like this:
 ```
-2015/12/18 04:37:24 Detected 8 cores and 8 Go processes
-43 / 689 [===>---------------------------------------------------] 6.24 % 5m16s
+2015/12/18 05:37:01 Detected 8 cores and 8 Go processes
+258 / 689 [====================>----------------------------------] 37.45 % 10s
 ```
 
 ## Searching
