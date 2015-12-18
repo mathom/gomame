@@ -1,3 +1,9 @@
+# external things
+mame/*
+
+# index types
+*.bleve
+
 # Windows image file caches
 Thumbs.db
 ehthumbs.db
