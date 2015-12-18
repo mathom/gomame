@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/xml"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"os/exec"
@@ -23,6 +24,7 @@ var (
 	indexFile  = flag.String("index", "index.bleve", "File to store search index in")
 	reindex    = flag.Bool("reindex", false, "Reindex ROMS")
 	debug      = flag.Bool("debug", false, "Print debug information")
+	search     = flag.String("search", "", "Fulltext ROM search")
 )
 
 type mame struct {
@@ -245,5 +247,16 @@ func main() {
 
 	if *reindex {
 		indexRoms()
+	}
+
+	if *search != "" {
+		index := openIndexFile(*indexFile)
+		query := bleve.NewQueryStringQuery(*search)
+		search := bleve.NewSearchRequest(query)
+		searchResults, err := index.Search(search)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(searchResults)
 	}
 }
