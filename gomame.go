@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/xml"
 	"flag"
 	"fmt"
@@ -14,7 +15,7 @@ import (
 	"time"
 
 	"github.com/blevesearch/bleve"
-	"github.com/briandowns/spinner"
+	"github.com/cheggaaa/pb"
 	"github.com/vharitonsky/iniflags"
 )
 
@@ -151,7 +152,7 @@ func openIndexFile(filename string) bleve.Index {
 }
 
 func readChunk(prefix string, results chan Game) {
-	defer timeTrack(time.Now(), "readChunk "+prefix)
+	//defer timeTrack(time.Now(), "readChunk "+prefix)
 
 	args := []string{"-rompath", *romsPath, "-lx", prefix}
 	cmd := exec.Command(*mameBinary, args...)
@@ -172,11 +173,12 @@ func readChunk(prefix string, results chan Game) {
 	}
 }
 
-func indexWorker(prefixes <-chan string) <-chan Game {
+func indexWorker(prefixes <-chan string, prefixFinished func()) <-chan Game {
 	output := make(chan Game)
 	go func() {
 		for p := range prefixes {
 			readChunk(p, output)
+			prefixFinished()
 		}
 		close(output)
 	}()
@@ -206,40 +208,77 @@ func merge(cs []<-chan Game) <-chan Game {
 	return out
 }
 
+func listPrefixes(numChars int) (int, <-chan string) {
+	output := make(chan string)
+
+	prefixUsed := make(map[string]bool)
+	args := []string{"-rompath", *romsPath, "-ll"}
+	cmd := exec.Command(*mameBinary, args...)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		log.Fatal(err)
+	}
+
+	scanner := bufio.NewScanner(stdout)
+	lineNum := 0
+	for scanner.Scan() {
+		lineNum++
+		if lineNum == 1 {
+			continue // skip first line (it's a header)
+		}
+		name := strings.SplitAfterN(scanner.Text(), " ", 2)[0]
+		prefix := name[0:numChars]
+		if _, used := prefixUsed[prefix]; used == false {
+			prefixUsed[prefix] = true
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := cmd.Wait(); err != nil {
+		log.Fatal(err)
+	}
+
+	go func() {
+		for prefix := range prefixUsed {
+			output <- prefix + "*"
+		}
+		close(output)
+	}()
+
+	return len(prefixUsed), output
+}
+
 func indexRoms() {
 	defer timeTrack(time.Now(), "indexRoms")
-	progress := spinner.New(spinner.CharSets[9], 5000*time.Millisecond)
-	progress.Prefix = "indexing games "
-	//progress.Start()
 
-	prefixes := make(chan string)
+	prefixCount, prefixes := listPrefixes(2)
 	index := openIndexFile(*indexFile)
 
 	log.Printf("Detected %d cores and %d Go processes",
 		runtime.NumCPU(), runtime.GOMAXPROCS(0))
 
-	numWorkers := runtime.GOMAXPROCS(0)
+	bar := pb.StartNew(prefixCount)
 
-	go func() {
-		prefixes <- "aa*"
-		prefixes <- "ab*"
-		prefixes <- "ac*"
-		prefixes <- "ad*"
-		prefixes <- "ae*"
-		prefixes <- "af*"
-		prefixes <- "ag*"
-		close(prefixes)
-	}()
+	prefixFinished := func() {
+		bar.Increment()
+	}
+
+	numWorkers := runtime.GOMAXPROCS(0)
 
 	var workers []<-chan Game
 	for i := 0; i < numWorkers; i++ {
-		workers = append(workers, indexWorker(prefixes))
+		workers = append(workers, indexWorker(prefixes, prefixFinished))
 	}
 
 	for range indexGames(index, merge(workers)) {
 	}
-
-	//progress.Stop()
+	bar.FinishPrint("Indexing complete!")
 }
 
 func main() {
