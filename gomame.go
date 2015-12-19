@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"os/exec"
 	"runtime"
 	"strconv"
@@ -93,7 +94,7 @@ func decodeXMLStream(input io.Reader) <-chan Game {
 					var m machine
 					err := decoder.DecodeElement(&m, &se)
 					if err != nil {
-						log.Fatal(err)
+						log.Fatalln(err)
 					}
 					if m.Runnable == "no" || m.IsBios == "yes" ||
 						m.IsDevice == "yes" || m.IsMechanical == "yes" {
@@ -111,7 +112,7 @@ func decodeXMLStream(input io.Reader) <-chan Game {
 func machineToGame(m machine) Game {
 	intYear, err := strconv.Atoi(strings.Replace(m.Year, "?", "0", -1))
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
 	return Game{
 		Name:         m.Name,
@@ -138,14 +139,14 @@ func indexGames(index bleve.Index, input <-chan Game) <-chan Game {
 			count++
 			if count > maxBatched {
 				if err := index.Batch(batch); err != nil {
-					log.Fatal(err)
+					log.Fatalln(err)
 				}
 				batch = index.NewBatch()
 				count = 0
 			}
 		}
 		if err := index.Batch(batch); err != nil {
-			log.Fatal(err)
+			log.Fatalln(err)
 		}
 		close(out)
 	}()
@@ -159,10 +160,10 @@ func openIndexFile(filename string) bleve.Index {
 		indexMapping := bleve.NewIndexMapping()
 		index, err = bleve.New(filename, indexMapping)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalln(err)
 		}
 	} else if err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
 	return index
 }
@@ -174,10 +175,10 @@ func readChunk(prefix string, results chan Game) {
 	cmd := exec.Command(*mameBinary, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
 	if err := cmd.Start(); err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
 
 	for g := range decodeXMLStream(stdout) {
@@ -185,7 +186,7 @@ func readChunk(prefix string, results chan Game) {
 	}
 
 	if err := cmd.Wait(); err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
 }
 
@@ -232,10 +233,10 @@ func listPrefixes(numChars int) (int, <-chan string) {
 	cmd := exec.Command(*mameBinary, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
 	if err := cmd.Start(); err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
 
 	scanner := bufio.NewScanner(stdout)
@@ -253,11 +254,11 @@ func listPrefixes(numChars int) (int, <-chan string) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
 
 	if err := cmd.Wait(); err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
 
 	go func() {
@@ -297,12 +298,20 @@ func indexRoms() {
 	bar.FinishPrint("Indexing complete!")
 }
 
+func deleteIndex() {
+	log.Printf("Removing index at %s", *indexFile)
+	if err := os.RemoveAll(*indexFile); err != nil {
+		log.Fatalln(err)
+	}
+}
+
 func main() {
 	iniflags.Parse()
 
 	bleve.Config.DefaultKVStore = "goleveldb"
 
 	if *reindex {
+		deleteIndex()
 		indexRoms()
 	}
 
@@ -315,7 +324,7 @@ func main() {
 		search.Size = 5
 		searchResults, err := index.Search(search)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalln(err)
 		}
 		fmt.Println(searchResults)
 	}
